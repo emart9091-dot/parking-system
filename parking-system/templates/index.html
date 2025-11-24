@@ -1,244 +1,179 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="utf-8">
-  <title>주차 차량 관리</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- 스타일 -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <meta charset="UTF-8">
+    <title>주차 차량 관리</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <div class="wrapper">
 
-  <h1>주차 차량 관리</h1>
+    <h1>🚗 주차 차량 관리</h1>
 
-  <!-- 플래시 메시지 -->
-  {% with messages = get_flashed_messages() %}
+    {% with messages = get_flashed_messages() %}
     {% if messages %}
-      <div class="flash-box">
+    <div class="flash-box">
         {% for m in messages %}
-          <div class="flash-item">{{ m }}</div>
+        <div class="flash-item">{{ m }}</div>
         {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
-
-  <!-- 주차 차량 등록 -->
-  <section class="card">
-    <h2>주차 차량 등록</h2>
-
-    <form method="post" action="{{ url_for('add') }}" class="form-vertical">
-      <label>날짜
-        <input type="date" name="date" value="{{ today }}">
-      </label>
-
-      <table class="data-table input-table">
-        <thead>
-          <tr>
-            <th>차량번호</th>
-          </tr>
-        </thead>
-        <tbody id="plate-tbody">
-        {% for i in range(5) %}
-          <tr>
-            <td>
-              <input type="text" name="plate"
-                     placeholder="예) 11저 8604"
-                     list="plate-list"
-                     autocomplete="off">
-            </td>
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-
-      <div class="add-row-box">
-        <button type="button" class="btn-sub btn-add-row" id="add-row-btn">+ 줄 추가</button>
-      </div>
-
-      <p class="hint">여러 대를 한 번에 입력할 수 있습니다. 빈 칸은 무시됩니다.</p>
-
-      <button type="submit" class="btn-primary">저장</button>
-    </form>
-
-    <!-- datalist: JS가 ALL_PLATES에서 2글자 이상 필터해서 채움 -->
-    <datalist id="plate-list"></datalist>
-  </section>
-
-  <!-- 날짜별 주차 차량 -->
-  <section class="card">
-    <h2>날짜별 주차 차량</h2>
-
-    <form method="get" action="{{ url_for('index') }}"
-          class="form-horizontal date-form">
-      <input type="date" name="view_date" value="{{ view_date }}">
-      {% if query_plate %}
-        <input type="hidden" name="q" value="{{ query_plate }}">
-      {% endif %}
-      <button type="submit" class="btn-sub">날짜 변경</button>
-    </form>
-
-    <p class="info-box">
-      총 차량 수: {{ day_count }}대
-    </p>
-
-    <div class="toolbar">
-      <a class="btn-sub" href="{{ url_for('export', scope='day', date=view_date) }}">해당 날짜 엑셀</a>
-      <a class="btn-sub" href="{{ url_for('export', scope='all') }}">전체 엑셀</a>
-      <a class="btn-sub"
-         href="{{ url_for('backup') }}"
-         onclick="return confirm('DB 전체 백업 파일을 다운로드할까요?');">
-        DB 백업
-      </a>
     </div>
-
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>차량번호</th>
-          <th>누적횟수</th>
-          <th>삭제</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% if day_rows %}
-        {% for row in day_rows %}
-          <tr>
-            <td>{{ row.plate }}</td>
-            <td>{{ row.total_cnt }}</td>
-            <td>
-              <form method="post" action="{{ url_for('delete') }}"
-                    onsubmit="return confirm('해당 날짜의 기록을 삭제할까요?');">
-                <input type="hidden" name="id" value="{{ row.id }}">
-                <button type="submit" class="btn-x">X</button>
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      {% else %}
-        <tr>
-          <td colspan="3">선택한 날짜에 등록된 차량이 없습니다.</td>
-        </tr>
-      {% endif %}
-      </tbody>
-    </table>
-  </section>
-
-  <!-- 차량 조회 -->
-  <section class="card">
-    <h2>차량 조회</h2>
-
-    <form method="get" action="{{ url_for('index') }}"
-          class="form-horizontal search-form">
-      <input type="text"
-             id="search-input"
-             name="q"
-             placeholder="예) 11저 8604"
-             value="{{ query_plate }}"
-             list="plate-list"
-             autocomplete="off">
-      <input type="hidden" name="view_date" value="{{ view_date }}">
-      <button type="submit" class="btn-sub">조회</button>
-    </form>
-
-    {% if search_result %}
-      <div class="search-result">
-        <p>
-          <span class="result-label">차량번호: </span>
-          <span class="result-value">{{ search_result.plate }}</span>
-        </p>
-        <p>
-          <span class="result-label">누적 주차 횟수: </span>
-          <span class="result-value">{{ search_result.total_cnt }}회</span>
-        </p>
-        {% if search_result.total_cnt > 0 %}
-          <p>
-            <span class="result-label">최초 입차일: </span>
-            <span class="result-value">{{ search_result.first_date }}</span>
-          </p>
-          <p>
-            <span class="result-label">최근 입차일: </span>
-            <span class="result-value">{{ search_result.last_date }}</span>
-          </p>
-        {% else %}
-          <p>입차 기록이 없습니다.</p>
-        {% endif %}
-      </div>
     {% endif %}
-  </section>
+    {% endwith %}
+
+    <!-- PC에서 가로 정렬 / 모바일은 세로 -->
+    <div class="cards-container">
+
+        <!-- 🚘 등록 -->
+        <section class="card">
+            <h2>차량 등록</h2>
+            <form method="post" action="{{ url_for('add') }}" class="form-vertical">
+
+                <label>날짜
+                    <input type="date" name="date" value="{{ today }}">
+                </label>
+
+                <table class="data-table input-table">
+                    <thead>
+                        <tr><th>차량번호</th></tr>
+                    </thead>
+                    <tbody id="plate-tbody">
+                        {% for i in range(5) %}
+                        <tr>
+                            <td>
+                                <input type="text" name="plate" list="plate-list"
+                                       placeholder="예) 12가 3456" autocomplete="off">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <button type="button" id="add-row-btn" class="btn-sub add-row">+ 줄 추가</button>
+
+                <p class="hint">빈 칸은 자동 무시됩니다.</p>
+                <button type="submit" class="btn-primary">저장</button>
+            </form>
+        </section>
+
+        <!-- 📅 날짜별 -->
+        <section class="card">
+            <h2>날짜별 차량</h2>
+
+            <form method="get" action="{{ url_for('index') }}" class="form-horizontal">
+                <input type="date" name="view_date" value="{{ view_date }}">
+                <button class="btn-sub">조회</button>
+            </form>
+
+            <p class="info-box">
+                총 {{ day_count }}대
+            </p>
+
+            <div class="toolbar">
+                <a class="btn-sub" href="{{ url_for('export') }}">전체 엑셀</a>
+            </div>
+
+            <table class="data-table">
+                <thead><tr><th>차량번호</th><th>횟수</th><th>삭제</th></tr></thead>
+                <tbody>
+                {% for r in day_rows %}
+                <tr>
+                    <td>{{ r[1] }}</td>
+                    <td>{{ r[2] }}</td>
+                    <td>
+                        <form method="post" action="{{ url_for('delete') }}">
+                            <input type="hidden" name="id" value="{{ r[0] }}">
+                            <button class="btn-x">X</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <!-- 🔍 검색 -->
+        <section class="card">
+            <h2>차량 조회</h2>
+            <form method="get" action="{{ url_for('index') }}" class="form-horizontal">
+                <input type="text" name="q" id="search-input"
+                       placeholder="예) 12가 3456"
+                       value="{{ query_plate }}" list="plate-list">
+                <input type="hidden" name="view_date" value="{{ view_date }}">
+                <button class="btn-sub">검색</button>
+            </form>
+
+            {% if search_result %}
+            <div class="search-result">
+                <p><strong>{{ search_result.plate }}</strong></p>
+                <p>누적: {{ search_result.total_cnt }}회</p>
+                {% if search_result.total_cnt > 0 %}
+                    <p>최초: {{ search_result.first_date }}</p>
+                    <p>최근: {{ search_result.last_date }}</p>
+                {% else %}
+                    <p>등록 기록 없음</p>
+                {% endif %}
+            </div>
+            {% endif %}
+        </section>
+
+    </div> <!-- end cards -->
 
 </div>
 
-<!-- JS: 번호판 포맷 + 줄 추가 + 자동완성(2글자 이상) -->
+<datalist id="plate-list">
+    {% for p in all_plates %}
+    <option value="{{ p }}">
+    {% endfor %}
+</datalist>
+
+
 <script>
-  // 전체 번호판 목록 (백엔드에서 넘겨주는 리스트)
-  const ALL_PLATES = {{ all_plates | tojson | safe }};
+document.addEventListener("DOMContentLoaded", () => {
 
-  // 번호판 포맷팅 (11저8604 → 11저 8604)
-  function attachPlateFormatter(input) {
-    if (!input) return;
-    input.addEventListener("blur", () => {
-      let v = input.value;
-      if (!v) return;
-      v = v.replace(/\s+/g, "");
-      const m = v.match(/^(\d{2,3}[가-힣])(\d{4})$/);
-      if (m) input.value = m[1] + " " + m[2];
-    });
-  }
+    const ALL = {{ all_plates | tojson | safe }};
 
-  // 자동완성 (2글자 이상 입력 시 datalist 채우기)
-  function attachAutocomplete(input) {
-    if (!input) return;
-    input.addEventListener("input", () => {
-      const v = (input.value || "").trim().toUpperCase();
-      const list = document.getElementById("plate-list");
-      if (!list) return;
-
-      if (v.length < 2) {
-        list.innerHTML = "";
-        return;
-      }
-
-      const matches = ALL_PLATES.filter(p =>
-        (p || "").toUpperCase().startsWith(v)
-      );
-      list.innerHTML = matches.map(p => `<option value="${p}">`).join("");
-    });
-  }
-
-  document.addEventListener("DOMContentLoaded", () => {
-    // 기존 등록 input들
-    document.querySelectorAll('input[name="plate"]').forEach(inp => {
-      attachPlateFormatter(inp);
-      attachAutocomplete(inp);
-    });
-
-    // 조회 input
-    const searchInput = document.getElementById("search-input");
-    attachAutocomplete(searchInput);
-
-    // 줄 추가 버튼
-    const addBtn  = document.getElementById("add-row-btn");
-    const tbody   = document.getElementById("plate-tbody");
-    if (addBtn && tbody) {
-      addBtn.addEventListener("click", () => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>
-            <input type="text" name="plate"
-                   placeholder="예) 11저 8604"
-                   list="plate-list"
-                   autocomplete="off">
-          </td>
-        `;
-        tbody.appendChild(tr);
-        const newInput = tr.querySelector('input[name="plate"]');
-        attachPlateFormatter(newInput);
-        attachAutocomplete(newInput);
-      });
+    function formatPlate(i){
+        i.addEventListener("blur", ()=>{
+            let v = i.value.replace(/\s+/g,"");
+            const m = v.match(/^(\d{2,3}[가-힣])(\d{4})$/);
+            if(m) i.value = m[1]+" "+m[2];
+        });
     }
-  });
+
+    function autoList(i){
+        i.addEventListener("input",()=>{
+            const v=i.value.trim().toUpperCase();
+            const list=document.getElementById("plate-list");
+            if(v.length<2){ list.innerHTML=""; return; }
+            const m = ALL.filter(p=>p.toUpperCase().startsWith(v));
+            list.innerHTML = m.map(p=>`<option value="${p}">`).join("");
+        });
+    }
+
+    document.querySelectorAll('input[name="plate"]').forEach(i=>{
+        formatPlate(i);
+        autoList(i);
+    });
+
+    const search = document.getElementById("search-input");
+    if(search){
+        autoList(search);
+        formatPlate(search);
+    }
+
+    document.getElementById("add-row-btn").addEventListener("click",()=>{
+        const tbody=document.getElementById("plate-tbody");
+        const tr=document.createElement("tr");
+        tr.innerHTML=`<td><input name="plate" placeholder="예) 12가 3456" list="plate-list" autocomplete="off"></td>`;
+        tbody.appendChild(tr);
+
+        const i = tr.querySelector("input");
+        formatPlate(i);
+        autoList(i);
+    });
+
+});
 </script>
 
 </body>
