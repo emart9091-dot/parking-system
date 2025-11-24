@@ -456,7 +456,7 @@ def export():
     wb.save(stream)
     stream.seek(0)
 
-    filename = f"parking_export_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    filename = datetime.now().strftime("%Y-%m-%d") + ".xlsx"
 
     return send_file(
         stream,
@@ -472,3 +472,4 @@ def export():
 if __name__ == "__main__":
 
     app.run(host="0.0.0.0", port=5000, debug=True)
+
