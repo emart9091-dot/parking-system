@@ -360,51 +360,109 @@ def build_excel(rows, title: str):
 @app.route("/export")
 def export():
     scope = request.args.get("scope", "day")
-    conn = get_conn()
+    view_date = request.args.get("date")
+
+    conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
-    if scope == "all":
-        # 전체 기간: 차량번호별 누적 주차 횟수
-        cur.execute(
-            "SELECT plate, COUNT(*) AS cnt "
-            "FROM logs "
-            "GROUP BY plate "
-            "ORDER BY plate"
-        )
-        rows = cur.fetchall()
-        title = "주차 차량 누적 횟수 (전체)"
-        filename = "parking_all.xlsx"
-    else:
-        # 특정 날짜 기준: 해당 날짜에 온 차량만, 누적 주차 횟수
-        date_str = request.args.get("date")
-        if not date_str:
-            date_str = datetime.now().strftime("%Y-%m-%d")
+    # ───────────────────────────────
+    # 1) Summary 시트 생성용 전체 데이터 조회
+    # ───────────────────────────────
+    cur.execute("""
+        SELECT
+            plate,
+            COUNT(*) AS total_cnt,
+            MIN(date) AS first_date,
+            MAX(date) AS last_date
+        FROM records
+        GROUP BY plate
+        ORDER BY plate
+    """)
+    summary_rows = cur.fetchall()
 
-        cur.execute(
-            "SELECT plate, COUNT(*) AS cnt "
-            "FROM logs "
-            "WHERE date=? "
-            "GROUP BY plate "
-            "ORDER BY plate",
-            (date_str,),
-        )
-        rows = cur.fetchall()
-        title = f"주차 차량 누적 횟수 ({date_str} 기준)"
-        filename = f"parking_{date_str}.xlsx"
+    # ───────────────────────────────
+    # 2) 날짜별 sheet 용 데이터 조회
+    # ───────────────────────────────
+    cur.execute("SELECT date, plate FROM records ORDER BY date, plate")
+    all_rows = cur.fetchall()
 
     conn.close()
 
-    data_rows = [(r["plate"], r["cnt"]) for r in rows]
-    bio = build_excel(data_rows, title=title)
+    # ───────────────────────────────
+    # 3) 엑셀 Workbook 생성
+    # ───────────────────────────────
+    wb = Workbook()
+    ws_summary = wb.active
+    ws_summary.title = "Summary"
+
+    headers = ["차량번호", "누적횟수", "최초입차일", "최근입차일"]
+    ws_summary.append(headers)
+
+    for row in summary_rows:
+        ws_summary.append(row)
+
+    # ───────────────────────────────
+    # 4) 날짜별 시트 생성
+    # ───────────────────────────────
+
+    grouped = {}
+    for date, plate in all_rows:
+        if date not in grouped:
+            grouped[date] = []
+        grouped[date].append(plate)
+
+    for date, plates in grouped.items():
+        ws = wb.create_sheet(title=date)
+
+        ws.append(["차량번호", "누적횟수", "최초입차일", "최근입차일"])
+        for plate in plates:
+            # Summary에서 정보 가져오기
+            match = next((r for r in summary_rows if r[0] == plate), None)
+            if match:
+                ws.append(match)
+            else:
+                ws.append([plate, 1, date, date])  # fallback
+
+    # ───────────────────────────────
+    # 5) 스타일 적용 (테두리, 정렬, Bold)
+    # ───────────────────────────────
+
+    border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin")
+    )
+    center = Alignment(horizontal="center", vertical="center")
+    bold = Font(bold=True)
+
+    for sheet in wb.worksheets:
+        for cell in sheet[1]:
+            cell.font = bold
+
+        for row in sheet.iter_rows():
+            for cell in row:
+                cell.alignment = center
+                cell.border = border
+
+        # 적당한 컬럼 폭
+        for col in range(1, sheet.max_column + 1):
+            sheet.column_dimensions[get_column_letter(col)].width = 15
+
+    # ───────────────────────────────
+    # 6) 파일을 메모리로 전송
+    # ───────────────────────────────
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    filename = f"parking_export_{datetime.now().strftime('%Y%m%d')}.xlsx"
 
     return send_file(
-        bio,
-        mimetype=(
-            "application/vnd.openxmlformats-officedocument."
-            "spreadsheetml.sheet"
-        ),
+        stream,
         as_attachment=True,
         download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
 
@@ -412,4 +470,5 @@ def export():
 # 로컬 실행용
 # -----------------------------
 if __name__ == "__main__":
+
     app.run(host="0.0.0.0", port=5000, debug=True)
