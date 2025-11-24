@@ -1,5 +1,4 @@
 import os
-import re
 from datetime import datetime
 from io import BytesIO
 
@@ -9,7 +8,6 @@ from flask import (
 )
 
 import psycopg2
-from psycopg2.extras import DictCursor
 
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side
@@ -20,26 +18,19 @@ app.secret_key = "parking_secret_key"
 
 LOGIN_PASSWORD = "1112"
 
-# ------------------------ PostgreSQL 연결 함수 ------------------------ #
+# ------------------------ PostgreSQL 연결 ------------------------ #
 
-# Render에서 "Add from Postgres"로 자동 추가되는 환경변수
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
 def get_conn():
-    """
-    PostgreSQL 연결 반환.
-    DATABASE_URL 은 Render Postgres 서비스에서 자동 주입된 값 사용.
-    """
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL 환경변수가 설정되어 있지 않습니다.")
     return psycopg2.connect(DATABASE_URL)
 
 
 def init_db():
-    """
-    앱 시작 시 records 테이블이 없으면 생성.
-    """
+    """records 테이블 없으면 생성"""
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
@@ -55,7 +46,6 @@ def init_db():
     conn.close()
 
 
-# 앱 시작할 때 한 번만 실행
 init_db()
 
 
@@ -80,7 +70,7 @@ def index():
         return redirect(url_for("login"))
 
     view_date = request.args.get("view_date") or datetime.now().strftime("%Y-%m-%d")
-    query_plate = request.args.get("q", "")
+    query_plate = request.args.get("q", "").strip()
 
     conn = get_conn()
     cur = conn.cursor()
@@ -149,6 +139,9 @@ def index():
 
 @app.route("/add", methods=["POST"])
 def add():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     date = request.form.get("date")
     plates = request.form.getlist("plate")
 
@@ -156,11 +149,12 @@ def add():
     cur = conn.cursor()
 
     for p in plates:
-        if not p.strip():
+        plate = p.strip()
+        if not plate:
             continue
         cur.execute(
             "INSERT INTO records (date, plate) VALUES (%s, %s)",
-            (date, p.strip()),
+            (date, plate),
         )
 
     conn.commit()
@@ -174,6 +168,9 @@ def add():
 
 @app.route("/delete", methods=["POST"])
 def delete():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     rid = request.form.get("id")
 
     conn = get_conn()
@@ -186,58 +183,90 @@ def delete():
     return redirect(url_for("index"))
 
 
-# -------------------------------- 엑셀 EXPORT (openpyxl) -------------------------------- #
+# -------------------------------- 엑셀 EXPORT -------------------------------- #
 
 @app.route("/export")
 def export():
+    if not session.get("logged_in"):
+        return redirect(url_for("login"))
+
     scope = request.args.get("scope", "day")
     view_date = request.args.get("date")
 
     conn = get_conn()
     cur = conn.cursor()
 
-    # summary
-    cur.execute(
-        """
-        SELECT
-            plate,
-            COUNT(*) AS total_cnt,
-            MIN(date) AS first_date,
-            MAX(date) AS last_date
-        FROM records
-        GROUP BY plate
-        ORDER BY plate
-        """
-    )
-    summary_rows = cur.fetchall()
-
-    # 전체
-    cur.execute("SELECT date, plate FROM records ORDER BY date, plate")
-    all_rows = cur.fetchall()
-    conn.close()
-
     wb = Workbook()
-    ws_summary = wb.active
-    ws_summary.title = "Summary"
 
-    ws_summary.append(["차량번호", "누적횟수", "최초입차일", "최근입차일"])
-    for row in summary_rows:
-        ws_summary.append(row)
-
-    grouped = {}
-    for date, plate in all_rows:
-        grouped.setdefault(date, []).append(plate)
-
-    for date, plates in grouped.items():
-        safe_date = date.replace("/", "-")[:31]
-
-        ws = wb.create_sheet(title=safe_date)
+    if scope == "day" and view_date:
+        # ── 1) 해당 날짜만 엑셀 ─────────────────────────────
+        ws = wb.active
+        ws.title = view_date
         ws.append(["차량번호", "누적횟수", "최초입차일", "최근입차일"])
 
-        for p in plates:
-            match = next((r for r in summary_rows if r[0] == p), None)
-            ws.append(match if match else [p, 1, date, date])
+        cur.execute(
+            """
+            SELECT
+                plate,
+                COUNT(*) AS total_cnt,
+                MIN(date) AS first_date,
+                MAX(date) AS last_date
+            FROM records
+            WHERE date = %s
+            GROUP BY plate
+            ORDER BY plate
+            """,
+            (view_date,),
+        )
+        rows = cur.fetchall()
+        for row in rows:
+            ws.append(row)
 
+    else:
+        # ── 2) 전체 엑셀 (Summary + 날짜별 시트) ─────────────────
+        ws_summary = wb.active
+        ws_summary.title = "Summary"
+
+        cur.execute(
+            """
+            SELECT
+                plate,
+                COUNT(*) AS total_cnt,
+                MIN(date) AS first_date,
+                MAX(date) AS last_date
+            FROM records
+            GROUP BY plate
+            ORDER BY plate
+            """
+        )
+        summary_rows = cur.fetchall()
+
+        ws_summary.append(["차량번호", "누적횟수", "최초입차일", "최근입차일"])
+        for row in summary_rows:
+            ws_summary.append(row)
+
+        cur.execute("SELECT date, plate FROM records ORDER BY date, plate")
+        all_rows = cur.fetchall()
+
+        grouped = {}
+        for date, plate in all_rows:
+            grouped.setdefault(date, []).append(plate)
+
+        for date, plates in grouped.items():
+            safe_date = date.replace("/", "-")[:31]
+            ws = wb.create_sheet(title=safe_date)
+            ws.append(["차량번호", "누적횟수", "최초입차일", "최근입차일"])
+
+            for p in plates:
+                match = next((r for r in summary_rows if r[0] == p), None)
+                if match:
+                    ws.append(match)
+                else:
+                    ws.append([p, 1, date, date])
+
+    conn.close()
+
+    # ── 공통 스타일 ───────────────────────────────────────────
     border = Border(
         left=Side(style="thin"),
         right=Side(style="thin"),
@@ -248,6 +277,7 @@ def export():
     bold = Font(bold=True)
 
     for sheet in wb.worksheets:
+        # 헤더 Bold
         for c in sheet[1]:
             c.font = bold
 
@@ -259,11 +289,15 @@ def export():
         for col in range(1, sheet.max_column + 1):
             sheet.column_dimensions[get_column_letter(col)].width = 15
 
+    # 파일 이름
+    if scope == "day" and view_date:
+        filename = f"{view_date}.xlsx"
+    else:
+        filename = datetime.now().strftime("%Y-%m-%d") + ".xlsx"
+
     stream = BytesIO()
     wb.save(stream)
     stream.seek(0)
-
-    filename = datetime.now().strftime("%Y-%m-%d") + ".xlsx"
 
     return send_file(
         stream,
