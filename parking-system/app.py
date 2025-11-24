@@ -1,6 +1,5 @@
 import os
 import re
-import sqlite3
 from datetime import datetime
 from io import BytesIO
 
@@ -9,6 +8,9 @@ from flask import (
     url_for, flash, send_file, session
 )
 
+import psycopg2
+from psycopg2.extras import DictCursor
+
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -16,13 +18,48 @@ from openpyxl.utils import get_column_letter
 app = Flask(__name__)
 app.secret_key = "parking_secret_key"
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "parking.db")
-
 LOGIN_PASSWORD = "1112"
 
+# ------------------------ PostgreSQL 연결 함수 ------------------------ #
 
-# -------------------------------- 로그인 --------------------------------
+# Render에서 "Add from Postgres"로 자동 추가되는 환경변수
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+
+def get_conn():
+    """
+    PostgreSQL 연결 반환.
+    DATABASE_URL 은 Render Postgres 서비스에서 자동 주입된 값 사용.
+    """
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL 환경변수가 설정되어 있지 않습니다.")
+    return psycopg2.connect(DATABASE_URL)
+
+
+def init_db():
+    """
+    앱 시작 시 records 테이블이 없으면 생성.
+    """
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS records (
+            id    SERIAL PRIMARY KEY,
+            date  TEXT NOT NULL,
+            plate TEXT NOT NULL
+        );
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+# 앱 시작할 때 한 번만 실행
+init_db()
+
+
+# -------------------------------- 로그인 -------------------------------- #
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -35,7 +72,7 @@ def login():
     return render_template("login.html")
 
 
-# -------------------------------- 메인 페이지 --------------------------------
+# -------------------------------- 메인 페이지 -------------------------------- #
 
 @app.route("/", methods=["GET"])
 def index():
@@ -45,7 +82,7 @@ def index():
     view_date = request.args.get("view_date") or datetime.now().strftime("%Y-%m-%d")
     query_plate = request.args.get("q", "")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     cur = conn.cursor()
 
     # 전체 차량 목록(자동완성용)
@@ -53,35 +90,43 @@ def index():
     all_plates = [row[0] for row in cur.fetchall()]
 
     # 선택 날짜 차량 목록
-    cur.execute("""
+    cur.execute(
+        """
         SELECT
-            id, plate,
+            id,
+            plate,
             (SELECT COUNT(*) FROM records r2 WHERE r2.plate = r.plate) AS total_cnt
         FROM records r
-        WHERE date = ?
+        WHERE date = %s
         ORDER BY plate
-    """, (view_date,))
+        """,
+        (view_date,),
+    )
     day_rows = cur.fetchall()
 
     # 조회 기능
     search_result = None
     if query_plate:
-        cur.execute("""
+        cur.execute(
+            """
             SELECT
                 plate,
                 COUNT(*) AS total_cnt,
                 MIN(date) AS first_date,
                 MAX(date) AS last_date
             FROM records
-            WHERE plate = ?
-        """, (query_plate,))
+            WHERE plate = %s
+            GROUP BY plate
+            """,
+            (query_plate,),
+        )
         row = cur.fetchone()
         if row and row[1] > 0:
             search_result = {
                 "plate": row[0],
                 "total_cnt": row[1],
                 "first_date": row[2],
-                "last_date": row[3]
+                "last_date": row[3],
             }
         else:
             search_result = {"plate": query_plate, "total_cnt": 0}
@@ -96,24 +141,28 @@ def index():
         day_rows=day_rows,
         day_count=len(day_rows),
         query_plate=query_plate,
-        search_result=search_result
+        search_result=search_result,
     )
 
 
-# -------------------------------- 차량 등록 --------------------------------
+# -------------------------------- 차량 등록 -------------------------------- #
 
 @app.route("/add", methods=["POST"])
 def add():
     date = request.form.get("date")
     plates = request.form.getlist("plate")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     cur = conn.cursor()
 
     for p in plates:
         if not p.strip():
             continue
-        cur.execute("INSERT INTO records (date, plate) VALUES (?, ?)", (date, p.strip()))
+        cur.execute(
+            "INSERT INTO records (date, plate) VALUES (%s, %s)",
+            (date, p.strip()),
+        )
+
     conn.commit()
     conn.close()
 
@@ -121,32 +170,35 @@ def add():
     return redirect(url_for("index", view_date=date))
 
 
-# -------------------------------- 삭제 --------------------------------
+# -------------------------------- 삭제 -------------------------------- #
 
 @app.route("/delete", methods=["POST"])
 def delete():
     rid = request.form.get("id")
-    conn = sqlite3.connect(DB_PATH)
+
+    conn = get_conn()
     cur = conn.cursor()
-    cur.execute("DELETE FROM records WHERE id = ?", (rid,))
+    cur.execute("DELETE FROM records WHERE id = %s", (rid,))
     conn.commit()
     conn.close()
+
     flash("삭제 완료")
     return redirect(url_for("index"))
 
 
-# -------------------------------- 엑셀 EXPORT (openpyxl) --------------------------------
+# -------------------------------- 엑셀 EXPORT (openpyxl) -------------------------------- #
 
 @app.route("/export")
 def export():
     scope = request.args.get("scope", "day")
     view_date = request.args.get("date")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_conn()
     cur = conn.cursor()
 
     # summary
-    cur.execute("""
+    cur.execute(
+        """
         SELECT
             plate,
             COUNT(*) AS total_cnt,
@@ -155,7 +207,8 @@ def export():
         FROM records
         GROUP BY plate
         ORDER BY plate
-    """)
+        """
+    )
     summary_rows = cur.fetchall()
 
     # 전체
@@ -176,7 +229,6 @@ def export():
         grouped.setdefault(date, []).append(plate)
 
     for date, plates in grouped.items():
-
         safe_date = date.replace("/", "-")[:31]
 
         ws = wb.create_sheet(title=safe_date)
@@ -186,8 +238,12 @@ def export():
             match = next((r for r in summary_rows if r[0] == p), None)
             ws.append(match if match else [p, 1, date, date])
 
-    border = Border(left=Side(style="thin"), right=Side(style="thin"),
-                    top=Side(style="thin"), bottom=Side(style="thin"))
+    border = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
     center = Alignment(horizontal="center", vertical="center")
     bold = Font(bold=True)
 
@@ -213,11 +269,12 @@ def export():
         stream,
         as_attachment=True,
         download_name=filename,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
 
 
-# -------------------------------- 로그아웃 --------------------------------
+# -------------------------------- 로그아웃 -------------------------------- #
+
 @app.route("/logout")
 def logout():
     session.clear()
