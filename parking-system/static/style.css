@@ -60,7 +60,7 @@ h1 {
   font-size: 15px;
 }
 
-/* 가로 폼 (날짜/조회) */
+/* 가로/세로 공용 폼 */
 .form-horizontal {
   display: flex;
   gap: 8px;
@@ -163,7 +163,7 @@ h1 {
 
 /* 날짜 / 총 차량수 정보 */
 .info-box {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 700;
   text-align: center;
   margin: 10px 0 8px;
@@ -176,6 +176,7 @@ h1 {
   justify-content: center;
   gap: 8px;
   margin: 6px 0 14px;
+  flex-wrap: wrap;
 }
 
 /* 조회 결과 */
@@ -206,31 +207,45 @@ h1 {
   border-radius: 6px;
   font-size: 13px;
   text-align: center;
-
 }
 
-/* PC 모드에서 가로 배치 */
+/* ---------- PC 전용 (가로 배치) ---------- */
 @media (min-width: 768px) {
 
-  .form-horizontal {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-  }
-
-  .form-horizontal input[type="date"],
-  .form-horizontal input[type="text"] {
-    width: 250px;
-  }
-
-  .toolbar {
-    display: flex;
-    flex-direction: row;
+  body {
     justify-content: center;
   }
 
+  .wrapper {
+    max-width: 900px;
+  }
+
+  /* 카드 폭 조금 넓게 */
   .card {
-    max-width: 700px;
-    margin: 0 auto;
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* 날짜 변경 / 조회 폼 가로 정렬 강화 */
+  .form-horizontal {
+    flex-wrap: nowrap;
+    justify-content: center;
+  }
+
+  .date-form input[type="date"],
+  .search-form input[type="text"] {
+    width: 260px;
+    flex: 0 0 260px;
+  }
+
+  .date-form button,
+  .search-form button {
+    flex: 0 0 auto;
+  }
+
+  /* 버튼 모음 가로배치 */
+  .toolbar {
+    flex-wrap: nowrap;
   }
 }
