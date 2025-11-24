@@ -207,5 +207,64 @@
   });
 </script>
 
+<script>
+  const ALL_PLATES = {{ all_plates | tojson | safe }};
+  
+  function attachAutocomplete(input) {
+    input.addEventListener("input", () => {
+      const value = input.value.trim();
+      const list = document.getElementById("plate-list");
+      
+      if (value.length < 2) {
+        list.innerHTML = "";
+        return;
+      }
+
+      const matches = ALL_PLATES.filter(p =>
+        p.toUpperCase().startsWith(value.toUpperCase())
+      );
+
+      list.innerHTML = matches.map(v => `<option value="${v}">`).join("");
+    });
+  }
+
+  function attachPlateFormatter(input) {
+    if (!input) return;
+    input.addEventListener("blur", function () {
+      let v = input.value;
+      if (!v) return;
+      v = v.replace(/\s+/g, "");
+      const m = v.match(/^(\d{2,3}[가-힣])(\d{4})$/);
+      if (m) input.value = `${m[1]} ${m[2]}`;
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    // 등록 input들
+    document.querySelectorAll('input[name="plate"]').forEach(i => {
+      attachPlateFormatter(i);
+      attachAutocomplete(i);
+    });
+
+    // 조회창 input
+    const search = document.querySelector('input[name="q"]');
+    if (search) attachAutocomplete(search);
+
+    // 줄 추가 input에도 자동 적용
+    document.getElementById("add-row-btn")?.addEventListener("click", () => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="text" name="plate" list="plate-list" placeholder="예) 11저 8604" autocomplete="off"></td>
+      `;
+      document.getElementById("plate-tbody").appendChild(tr);
+
+      const input = tr.querySelector("input");
+      attachPlateFormatter(input);
+      attachAutocomplete(input);
+    });
+  });
+</script>
+
 </body>
 </html>
+
