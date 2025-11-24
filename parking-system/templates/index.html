@@ -1,181 +1,237 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>주차 차량 관리</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta charset="utf-8">
+  <title>주차 차량 관리</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
 <div class="wrapper">
 
-    <h1>주차 차량 관리</h1>
+  <h1>주차 차량 관리</h1>
 
-    {% with messages = get_flashed_messages() %}
+  {% with messages = get_flashed_messages() %}
     {% if messages %}
-    <div class="flash-box">
+      <div class="flash-box">
         {% for m in messages %}
-        <div class="flash-item">{{ m }}</div>
+          <div class="flash-item">{{ m }}</div>
         {% endfor %}
-    </div>
+      </div>
     {% endif %}
-    {% endwith %}
+  {% endwith %}
 
-    <!-- PC에서 가로 정렬 / 모바일은 세로 -->
-    <div class="cards-container">
+  <div class="cards-container">
 
-        <!-- 🚘 등록 -->
-        <section class="card">
-            <h2>차량 등록</h2>
-            <form method="post" action="{{ url_for('add') }}" class="form-vertical">
+    <!-- 차량 등록 -->
+    <section class="card">
+      <h2>차량 등록</h2>
+      <form method="post" action="{{ url_for('add') }}" class="form-vertical">
 
-                <label>날짜
-                    <input type="date" name="date" value="{{ today }}">
-                </label>
+        <label>날짜
+          <input type="date" name="date" value="{{ today }}">
+        </label>
 
-                <table class="data-table input-table">
-                    <thead>
-                        <tr><th>차량번호</th></tr>
-                    </thead>
-                    <tbody id="plate-tbody">
-                        {% for i in range(5) %}
-                        <tr>
-                            <td>
-                                <input type="text" name="plate" list="plate-list"
-                                       placeholder="예) 12가 3456" autocomplete="off">
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+        <table class="data-table input-table">
+          <thead>
+          <tr>
+            <th>차량번호</th>
+          </tr>
+          </thead>
+          <tbody id="plate-tbody">
+          {% for i in range(5) %}
+            <tr>
+              <td>
+                <input type="text" name="plate" list="plate-list"
+                       placeholder="예) 11저 8604" autocomplete="off">
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
 
-                <button type="button" id="add-row-btn" class="btn-sub add-row">+ 줄 추가</button>
+        <div class="add-row-box">
+          <button type="button" class="btn-sub btn-add-row" id="add-row-btn">+ 줄 추가</button>
+        </div>
 
-                <p class="hint">빈 칸은 자동 무시됩니다.</p>
-                <button type="submit" class="btn-primary">저장</button>
-            </form>
-        </section>
+        <p class="hint">빈 칸은 자동으로 무시됩니다.</p>
 
-        <!-- 📅 날짜별 -->
-        <section class="card">
-            <h2>날짜별 차량</h2>
+        <button type="submit" class="btn-primary">저장</button>
+      </form>
+    </section>
 
-            <form method="get" action="{{ url_for('index') }}" class="form-horizontal">
-                <input type="date" name="view_date" value="{{ view_date }}">
-                <button class="btn-sub">조회</button>
-            </form>
+    <!-- 날짜별 차량 -->
+    <section class="card">
+      <h2>날짜별 차량</h2>
 
-            <p class="info-box">
-                총 {{ day_count }}대
+      <form method="get" action="{{ url_for('index') }}" class="form-horizontal">
+        <input type="date" name="view_date" value="{{ view_date }}">
+        <button class="btn-sub">조회</button>
+      </form>
+
+      <p class="info-box">
+        총 {{ day_count }}대
+      </p>
+
+      <div class="toolbar">
+        <a class="btn-sub"
+           href="{{ url_for('export', scope='day', date=view_date) }}">
+          해당 날짜 엑셀
+        </a>
+        <a class="btn-sub"
+           href="{{ url_for('export', scope='all') }}">
+          전체 엑셀
+        </a>
+      </div>
+
+      <table class="data-table">
+        <thead>
+        <tr>
+          <th>차량번호</th>
+          <th>누적횟수</th>
+          <th>삭제</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% if day_rows %}
+          {% for row in day_rows %}
+            <tr>
+              <td>{{ row[1] }}</td>
+              <td>{{ row[2] }}</td>
+              <td>
+                <form method="post" action="{{ url_for('delete') }}"
+                      onsubmit="return confirm('해당 기록을 삭제할까요?');">
+                  <input type="hidden" name="id" value="{{ row[0] }}">
+                  <button class="btn-x">X</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        {% else %}
+          <tr>
+            <td colspan="3">선택한 날짜에 등록된 차량이 없습니다.</td>
+          </tr>
+        {% endif %}
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 차량 조회 -->
+    <section class="card">
+      <h2>차량 조회</h2>
+
+      <form method="get" action="{{ url_for('index') }}" class="form-horizontal">
+        <input type="text" name="q" list="plate-list"
+               placeholder="예) 11저 8604" value="{{ query_plate }}">
+        <input type="hidden" name="view_date" value="{{ view_date }}">
+        <button type="submit" class="btn-sub">조회</button>
+      </form>
+
+      {% if query_plate %}
+        <div class="search-result">
+          {% if search_result %}
+            <p>
+              <span class="result-label">차량번호:</span>
+              <span class="result-value">{{ search_result.plate }}</span>
+            </p>
+            <p>
+              <span class="result-label">누적 주차 횟수:</span>
+              <span class="result-value">{{ search_result.total_cnt }} 회</span>
             </p>
 
-            <div class="toolbar">
-                <a class="btn-sub" href="{{ url_for('export') }}">전체 엑셀</a>
-            </div>
-
-            <table class="data-table">
-                <thead><tr><th>차량번호</th><th>횟수</th><th>삭제</th></tr></thead>
-                <tbody>
-                {% for r in day_rows %}
-                <tr>
-                    <td>{{ r[1] }}</td>
-                    <td>{{ r[2] }}</td>
-                    <td>
-                        <form method="post" action="{{ url_for('delete') }}">
-                            <input type="hidden" name="id" value="{{ r[0] }}">
-                            <button class="btn-x">X</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </section>
-
-        <!-- 🔍 검색 -->
-        <section class="card">
-            <h2>차량 조회</h2>
-            <form method="get" action="{{ url_for('index') }}" class="form-horizontal">
-                <input type="text" name="q" id="search-input"
-                       placeholder="예) 12가 3456"
-                       value="{{ query_plate }}" list="plate-list">
-                <input type="hidden" name="view_date" value="{{ view_date }}">
-                <button class="btn-sub">검색</button>
-            </form>
-
-            {% if search_result %}
-            <div class="search-result">
-                <p><strong>{{ search_result.plate }}</strong></p>
-                <p>누적: {{ search_result.total_cnt }}회</p>
-                {% if search_result.total_cnt > 0 %}
-                    <p>최초: {{ search_result.first_date }}</p>
-                    <p>최근: {{ search_result.last_date }}</p>
-                {% else %}
-                    <p>등록 기록 없음</p>
-                {% endif %}
-            </div>
+            {% if search_result.total_cnt > 0 %}
+              <p>
+                <span class="result-label">최초 입차일:</span>
+                <span class="result-value">{{ search_result.first_date }}</span>
+              </p>
+              <p>
+                <span class="result-label">최근 입차일:</span>
+                <span class="result-value">{{ search_result.last_date }}</span>
+              </p>
+            {% else %}
+              <p>입차 기록이 없습니다.</p>
             {% endif %}
-        </section>
+          {% else %}
+            <p>입차 기록이 없습니다.</p>
+          {% endif %}
+        </div>
+      {% endif %}
+    </section>
 
-    </div> <!-- end cards -->
+  </div> <!-- cards-container -->
 
-</div>
+</div> <!-- wrapper -->
 
 <datalist id="plate-list">
-    {% for p in all_plates %}
+  {% for p in all_plates %}
     <option value="{{ p }}">
-    {% endfor %}
+  {% endfor %}
 </datalist>
 
-
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+  const ALL_PLATES = {{ all_plates | tojson | safe }};
 
-    const ALL = {{ all_plates | tojson | safe }};
+  function attachPlateFormatter(input) {
+    if (!input) return;
+    input.addEventListener("blur", function () {
+      let v = input.value;
+      if (!v) return;
+      v = v.replace(/\s+/g, "");
+      const m = v.match(/^(\d{2,3}[가-힣])(\d{4})$/);
+      if (m) {
+        input.value = m[1] + " " + m[2];
+      }
+    });
+  }
 
-    function formatPlate(i){
-        i.addEventListener("blur", ()=>{
-            let v = i.value.replace(/\s+/g,"");
-            const m = v.match(/^(\d{2,3}[가-힣])(\d{4})$/);
-            if(m) i.value = m[1]+" "+m[2];
-        });
-    }
+  function attachAutocomplete(input) {
+    if (!input) return;
+    input.addEventListener("input", function () {
+      const v = input.value.trim().toUpperCase();
+      const list = document.getElementById("plate-list");
+      if (v.length < 2) {
+        list.innerHTML = "";
+        return;
+      }
+      const matches = ALL_PLATES.filter(p => p.toUpperCase().startsWith(v));
+      list.innerHTML = matches.map(p => `<option value="${p}">`).join("");
+    });
+  }
 
-    function autoList(i){
-        i.addEventListener("input",()=>{
-            const v=i.value.trim().toUpperCase();
-            const list=document.getElementById("plate-list");
-            if(v.length<2){ list.innerHTML=""; return; }
-            const m = ALL.filter(p=>p.toUpperCase().startsWith(v));
-            list.innerHTML = m.map(p=>`<option value="${p}">`).join("");
-        });
-    }
-
-    document.querySelectorAll('input[name="plate"]').forEach(i=>{
-        formatPlate(i);
-        autoList(i);
+  document.addEventListener("DOMContentLoaded", function () {
+    // 등록 폼 입력칸들
+    document.querySelectorAll('input[name="plate"]').forEach(function (el) {
+      attachPlateFormatter(el);
+      attachAutocomplete(el);
     });
 
-    const search = document.getElementById("search-input");
-    if(search){
-        autoList(search);
-        formatPlate(search);
+    // 조회 입력칸
+    const searchInput = document.querySelector('input[name="q"]');
+    if (searchInput) {
+      attachPlateFormatter(searchInput);
+      attachAutocomplete(searchInput);
     }
 
-    document.getElementById("add-row-btn").addEventListener("click",()=>{
-        const tbody=document.getElementById("plate-tbody");
-        const tr=document.createElement("tr");
-        tr.innerHTML=`<td><input name="plate" placeholder="예) 12가 3456" list="plate-list" autocomplete="off"></td>`;
+    // 줄 추가 버튼
+    const addBtn = document.getElementById("add-row-btn");
+    const tbody = document.getElementById("plate-tbody");
+    if (addBtn && tbody) {
+      addBtn.addEventListener("click", function () {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>
+            <input type="text" name="plate" list="plate-list"
+                   placeholder="예) 11저 8604" autocomplete="off">
+          </td>
+        `;
         tbody.appendChild(tr);
-
-        const i = tr.querySelector("input");
-        formatPlate(i);
-        autoList(i);
-    });
-
-});
+        const newInput = tr.querySelector('input[name="plate"]');
+        attachPlateFormatter(newInput);
+        attachAutocomplete(newInput);
+      });
+    }
+  });
 </script>
 
 </body>
 </html>
-
