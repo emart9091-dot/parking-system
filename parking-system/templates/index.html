@@ -169,69 +169,66 @@
 </datalist>
 
 <script>
-  const ALL_PLATES = {{ all_plates | tojson | safe }};
+ const ALL_PLATES = {{ all_plates | tojson | safe }};
 
-  function attachPlateFormatter(input) {
-    if (!input) return;
-    input.addEventListener("blur", function () {
-      let v = input.value;
-      if (!v) return;
-      v = v.replace(/\s+/g, "");
-      const m = v.match(/^(\d{2,3}[가-힣])(\d{4})$/);
-      if (m) {
-        input.value = m[1] + " " + m[2];
-      }
-    });
-  }
+function normalizeStr(str) {
+  return str.replace(/\s+/g, "").toUpperCase();
+}
 
-  function attachAutocomplete(input) {
-    if (!input) return;
-    input.addEventListener("input", function () {
-      const v = input.value.trim().toUpperCase();
-      const list = document.getElementById("plate-list");
-      if (v.length < 2) {
-        list.innerHTML = "";
-        return;
-      }
-      const matches = ALL_PLATES.filter(p => p.toUpperCase().startsWith(v));
-      list.innerHTML = matches.map(p => `<option value="${p}">`).join("");
-    });
-  }
+function formatPlate(input) {
+  let v = input.value.replace(/\s+/g, "");
+  const match = v.match(/^(\d{2,3}[가-힣])(\d{4})$/);
+  if (match) input.value = match[1] + " " + match[2];
+}
 
-  document.addEventListener("DOMContentLoaded", function () {
-    // 등록 폼 입력칸들
-    document.querySelectorAll('input[name="plate"]').forEach(function (el) {
-      attachPlateFormatter(el);
-      attachAutocomplete(el);
-    });
+function setupAutocomplete(input) {
+  input.addEventListener("input", function () {
+    const v = normalizeStr(input.value);
 
-    // 조회 입력칸
-    const searchInput = document.querySelector('input[name="q"]');
-    if (searchInput) {
-      attachPlateFormatter(searchInput);
-      attachAutocomplete(searchInput);
+    if (v.length < 2) {
+      input.setAttribute("list", "");
+      return;
     }
 
-    // 줄 추가 버튼
-    const addBtn = document.getElementById("add-row-btn");
-    const tbody = document.getElementById("plate-tbody");
-    if (addBtn && tbody) {
-      addBtn.addEventListener("click", function () {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>
-            <input type="text" name="plate" list="plate-list"
-                   placeholder="예) 11저 8604" autocomplete="off">
-          </td>
-        `;
-        tbody.appendChild(tr);
-        const newInput = tr.querySelector('input[name="plate"]');
-        attachPlateFormatter(newInput);
-        attachAutocomplete(newInput);
-      });
-    }
+    const filtered = ALL_PLATES.filter(p => normalizeStr(p).includes(v));
+
+    const list = document.getElementById("plate-list");
+    list.innerHTML = filtered.map(p => `<option value="${p}">`).join("");
+
+    input.setAttribute("list", "plate-list");
   });
+
+  input.addEventListener("blur", () => formatPlate(input));
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  // 등록 입력칸들
+  document.querySelectorAll('input[name="plate"]').forEach(setupAutocomplete);
+
+  // 조회 입력칸도 자동완성 적용
+  const searchInput = document.querySelector('input[name="q"]');
+  if (searchInput) setupAutocomplete(searchInput);
+
+  // 줄 추가 버튼
+  const addBtn = document.getElementById("add-row-btn");
+  const tbody = document.getElementById("plate-tbody");
+
+  if (addBtn && tbody) {
+    addBtn.addEventListener("click", function () {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>
+          <input type="text" name="plate" list="plate-list"
+                 placeholder="예) 11저 8604" autocomplete="off">
+        </td>
+      `;
+      tbody.appendChild(tr);
+      setupAutocomplete(tr.querySelector('input[name="plate"]'));
+    });
+  }
+});
 </script>
 
 </body>
 </html>
+
