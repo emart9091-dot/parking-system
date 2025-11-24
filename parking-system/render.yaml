@@ -1,6 +1,7 @@
 services:
   - type: web
     name: parking-system
-    env: python
+    runtime: python
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
+    rootDir: .
