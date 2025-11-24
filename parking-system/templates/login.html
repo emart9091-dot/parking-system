@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <title>주차 관리 로그인</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body>
+<div class="wrapper">
+  <h1>주차 관리 로그인</h1>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="flash-box">
+        {% for m in messages %}
+          <div class="flash-item">{{ m }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+
+  <section class="card">
+    <h2>비밀번호 입력</h2>
+    <form method="post" action="{{ url_for('login') }}" class="form-vertical">
+      <label>비밀번호
+        <input type="password" name="password" autofocus>
+      </label>
+      <button type="submit" class="btn-primary">입장</button>
+    </form>
+    <p class="hint">비밀번호는 내부 직원용으로만 공유하세요.</p>
+  </section>
+</div>
+</body>
+</html>
