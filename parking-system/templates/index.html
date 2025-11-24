@@ -1,271 +1,211 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <title>주차 관리 시스템</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8">
+  <title>주차 차량 관리</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background-color: #f5f5f5;
-      color: #222;
-      padding: 10px;
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      background: #ffffff;
-      border-radius: 8px;
-      padding: 12px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-    }
-
-    header {
-      margin-bottom: 10px;
-      border-bottom: 1px solid #eee;
-      padding-bottom: 8px;
-    }
-
-    header h1 {
-      font-size: 1.25rem;
-      margin-bottom: 4px;
-    }
-
-    header .date-display {
-      font-size: 0.95rem;
-      color: #666;
-    }
-
-    .summary-line {
-      margin: 10px 0;
-      font-size: 0.95rem;
-      font-weight: 500;
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      white-space: nowrap;
-    }
-
-    .summary-line span {
-      display: inline-block;
-    }
-
-    @media (max-width: 480px) {
-      .summary-line {
-        font-size: 0.9rem;
-      }
-    }
-
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 10px;
-    }
-
-    .controls form {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      align-items: center;
-    }
-
-    label {
-      font-size: 0.85rem;
-      color: #555;
-    }
-
-    input[type="date"],
-    input[type="text"],
-    button {
-      padding: 6px 8px;
-      border-radius: 4px;
-      border: 1px solid #ccc;
-      font-size: 0.9rem;
-    }
-
-    input[type="date"],
-    input[type="text"] {
-      min-width: 0;
-    }
-
-    button {
-      background-color: #1976d2;
-      color: #fff;
-      cursor: pointer;
-      border: none;
-      font-weight: 500;
-    }
-
-    button:hover {
-      background-color: #145ca5;
-    }
-
-    .plate-input-group {
-      display: flex;
-      flex-wrap: nowrap;
-      gap: 6px;
-      width: 100%;
-    }
-
-    .plate-input-group input[type="text"] {
-      flex: 1;
-    }
-
-    .table-wrapper {
-      margin-top: 12px;
-      border-top: 1px solid #eee;
-      padding-top: 8px;
-      overflow-x: auto;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.85rem;
-      margin-top: 6px;
-    }
-
-    th, td {
-      padding: 6px 4px;
-      border-bottom: 1px solid #eee;
-      text-align: left;
-      white-space: nowrap;
-    }
-
-    th {
-      background-color: #fafafa;
-      font-weight: 600;
-    }
-
-    tr:nth-child(even) td {
-      background-color: #fcfcfc;
-    }
-
-    .no-data {
-      padding: 12px 4px;
-      font-size: 0.9rem;
-      color: #777;
-    }
-
-  </style>
+  <!-- 기존 스타일 유지 -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="container">
-    <header>
-      <h1>주차 관리 시스템</h1>
-      <!-- 위에는 선택된 날짜만 깔끔하게 표시 -->
-      <div class="date-display">
-        {{ selected_date }}
+<div class="wrapper">
+
+  <h1>주차 차량 관리</h1>
+
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="flash-box">
+        {% for m in messages %}
+          <div class="flash-item">{{ m }}</div>
+        {% endfor %}
       </div>
-    </header>
+    {% endif %}
+  {% endwith %}
 
-    <!-- 여기서는 "총 차량 수 0대" 만 표시 (선택날짜: ~~ 문구 제거) -->
-    <div class="summary-line">
-      <span id="summary-count">총 차량 수 {{ total_count }}대</span>
-    </div>
+  <!-- 주차 차량 등록 -->
+  <section class="card">
+    <h2>주차 차량 등록</h2>
+    <form method="post" action="{{ url_for('add') }}" class="form-vertical">
+      <label>날짜
+        <input type="date" name="date" value="{{ today }}">
+      </label>
 
-    <!-- 날짜 변경 / 차량 추가 영역 -->
-    <section class="controls">
-      <!-- 날짜 변경 폼 (GET) -->
-      <form method="get" action="/">
-        <label for="date">날짜 선택</label>
-        <input
-          type="date"
-          id="date"
-          name="date"
-          value="{{ selected_date }}"
-        />
-        <button type="submit">이동</button>
-      </form>
-
-      <!-- 차량 추가 폼 (POST) -->
-      <form method="post" action="/" style="width:100%;">
-        <div class="plate-input-group">
-          <input
-            id="plate-input"
-            name="plate"
-            list="plate-suggestions"
-            placeholder="차량번호 입력 (예: 12가1234)"
-            autocomplete="off"
-            required
-          />
-          <datalist id="plate-suggestions"></datalist>
-
-          <button type="submit">추가</button>
-        </div>
-      </form>
-    </section>
-
-    <!-- 리스트 영역 -->
-    <section class="table-wrapper">
-      {% if records and records|length > 0 %}
-      <table>
+      <table class="data-table input-table">
         <thead>
           <tr>
-            <th>번호</th>
             <th>차량번호</th>
-            <th>입력시간</th>
-            <th>비고</th>
           </tr>
         </thead>
-        <tbody>
-          {% for r in records %}
+        <tbody id="plate-tbody">
+        {% for i in range(5) %}
           <tr>
-            <td>{{ loop.index }}</td>
-            <td>{{ r.plate }}</td>
-            <td>{{ r.time }}</td>
-            <td>{{ r.memo or "" }}</td>
+            <td>
+              <input type="text" name="plate" list="plate-list"
+                     placeholder="예) 11저 8604" autocomplete="off">
+            </td>
           </tr>
-          {% endfor %}
+        {% endfor %}
         </tbody>
       </table>
-      {% else %}
-      <div class="no-data">
-        등록된 차량이 없습니다.
+
+      <div class="add-row-box">
+        <button type="button" class="btn-sub btn-add-row" id="add-row-btn">+ 줄 추가</button>
       </div>
+
+      <p class="hint">여러 대를 한 번에 입력할 수 있습니다. 빈 칸은 무시됩니다.</p>
+
+      <button type="submit" class="btn-primary">저장</button>
+    </form>
+
+    <!-- 자동완성 → 2글자 이상 입력해야 뜨게 개선 -->
+    <datalist id="plate-list"></datalist>
+  </section>
+
+  <!-- 날짜별 주차 차량 -->
+  <section class="card">
+    <h2>날짜별 주차 차량</h2>
+
+    <form method="get" action="{{ url_for('index') }}" class="form-horizontal date-form">
+      <input type="date" name="view_date" value="{{ view_date }}">
+      {% if query_plate %}
+        <input type="hidden" name="q" value="{{ query_plate }}">
       {% endif %}
-    </section>
-  </div>
+      <button type="submit" class="btn-sub">날짜 변경</button>
+    </form>
 
-  <!-- 번호판 자동완성: 앞 2글자 이상일 때만 -->
-  <script>
-    // Flask에서 넘겨주는 전체 차량번호 목록이라고 가정
-    // Python 쪽에서: render_template(..., all_plates=리스트)
-    const ALL_PLATES = {{ all_plates | tojson | safe }};
+    <p class="info-box">
+      총 차량 수: {{ day_count }}대
+    </p>
 
-    const plateInput = document.getElementById('plate-input');
-    const dataList   = document.getElementById('plate-suggestions');
+    <div class="toolbar">
+      <a class="btn-sub" href="{{ url_for('export', scope='day', date=view_date) }}">해당 날짜 엑셀</a>
+      <a class="btn-sub" href="{{ url_for('export', scope='all') }}">전체 엑셀</a>
+      <a class="btn-sub" href="{{ url_for('backup') }}"
+         onclick="return confirm('DB 전체 백업 파일을 다운로드할까요?');">
+        DB 백업
+      </a>
+    </div>
 
-    plateInput.addEventListener('input', () => {
-      const value = plateInput.value.trim().toUpperCase();
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>차량번호</th>
+          <th>누적횟수</th>
+          <th>삭제</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% if day_rows %}
+        {% for row in day_rows %}
+          <tr>
+            <td>{{ row.plate }}</td>
+            <td>{{ row.total_cnt }}</td>
+            <td>
+              <form method="post" action="{{ url_for('delete') }}"
+                    onsubmit="return confirm('해당 날짜의 기록을 삭제할까요?');">
+                <input type="hidden" name="id" value="{{ row.id }}">
+                <button type="submit" class="btn-x">X</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      {% else %}
+        <tr>
+          <td colspan="3">선택한 날짜에 등록된 차량이 없습니다.</td>
+        </tr>
+      {% endif %}
+      </tbody>
+    </table>
+  </section>
 
-      // 2글자 미만이면 자동완성 비우기
-      if (value.length < 2) {
-        dataList.innerHTML = '';
-        return;
+  <!-- 차량 조회 -->
+  <section class="card">
+    <h2>차량 조회</h2>
+
+    <form method="get" action="{{ url_for('index') }}" class="form-horizontal">
+      <input type="text" id="search-input" name="q"
+             placeholder="예) 11저 8604" value="{{ query_plate }}" autocomplete="off">
+      <input type="hidden" name="view_date" value="{{ view_date }}">
+      <button type="submit" class="btn-sub">조회</button>
+    </form>
+
+    {% if search_result %}
+      <div class="search-result">
+        <p>
+          <span class="result-label">차량번호: </span>
+          <span class="result-value">{{ search_result.plate }}</span>
+        </p>
+        <p>
+          <span class="result-label">누적 주차 횟수: </span>
+          <span class="result-value">{{ search_result.total_cnt }} 회</span>
+        </p>
+        {% if search_result.total_cnt > 0 %}
+          <p>
+            <span class="result-label">최초 입차일: </span>
+            <span class="result-value">{{ search_result.first_date }}</span>
+          </p>
+          <p>
+            <span class="result-label">최근 입차일: </span>
+            <span class="result-value">{{ search_result.last_date }}</span>
+          </p>
+        {% else %}
+          <p>입차 기록이 없습니다.</p>
+        {% endif %}
+      </div>
+    {% endif %}
+  </section>
+
+</div>
+
+<script>
+  // 🔥 plate 자동 포맷팅
+  function attachPlateFormatter(input) {
+    if (!input) return;
+    input.addEventListener("blur", function () {
+      let v = input.value;
+      if (!v) return;
+      v = v.replace(/\s+/g, "");
+      const m = v.match(/^(\d{2,3}[가-힣])(\d{4})$/);
+      if (m) {
+        input.value = m[1] + " " + m[2];
       }
-
-      // 2글자 이상일 때만 필터링
-      const filtered = ALL_PLATES.filter(p =>
-        (p || '').toUpperCase().startsWith(value)
-      );
-
-      dataList.innerHTML = '';
-      filtered.forEach(p => {
-        const option = document.createElement('option');
-        option.value = p;
-        dataList.appendChild(option);
-      });
     });
-  </script>
+  }
+
+  // 🔥 자동완성 2글자 이상 검색 적용
+  const ALL_PLATES = {{ all_plates | tojson | safe }};
+  const dataList = document.getElementById("plate-list");
+
+  function updateAutocomplete(value) {
+    if (value.length < 2) {
+      dataList.innerHTML = "";
+      return;
+    }
+    const filtered = ALL_PLATES.filter(p => p.toUpperCase().startsWith(value.toUpperCase()));
+    dataList.innerHTML = filtered.map(p => `<option value="${p}">`).join("");
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll('input[name="plate"]').forEach(input => {
+      attachPlateFormatter(input);
+      input.addEventListener("input", () => updateAutocomplete(input.value));
+    });
+
+    const addBtn = document.getElementById("add-row-btn");
+    const tbody = document.getElementById("plate-tbody");
+    if (addBtn && tbody) {
+      addBtn.addEventListener("click", function () {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td><input type="text" name="plate" placeholder="예) 11저 8604" autocomplete="off"></td>`;
+        tbody.appendChild(tr);
+        const newInput = tr.querySelector("input");
+        attachPlateFormatter(newInput);
+        newInput.addEventListener("input", () => updateAutocomplete(newInput.value));
+      });
+    }
+  });
+</script>
+
 </body>
 </html>
